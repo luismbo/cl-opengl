@@ -131,6 +131,7 @@
    #:init-display-string
    #:init-window-size
    #:init-window-position
+   #:with-gl-context
 
    ;; event loop api
    #:main-loop

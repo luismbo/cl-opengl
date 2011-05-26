@@ -71,6 +71,44 @@
       (%init program-name)))
   (values))
 
+#+darwin
+(progn
+  #+sbcl
+  (defun call-within-initial-thread (fn &optional synchronous)
+    ;; KLUDGE: find a better way to get the initial thread.
+    (let ((initial-thread (car (last (sb-thread:list-all-threads)))))
+      (cond ((eq sb-thread:*current-thread* initial-thread)
+             (funcall fn))
+            (synchronous
+             (let (result
+                   error
+                   (sem (sb-thread:make-semaphore)))
+               (sb-thread:interrupt-thread
+                initial-thread
+                (lambda ()
+                  (multiple-value-setq (result error)
+                    (ignore-errors (funcall fn)))
+                  (sb-thread:signal-semaphore sem)))
+               (sb-thread:wait-on-semaphore sem)
+               (if error
+                   (signal error)
+                   result)))
+            (t
+             (sb-thread:interrupt-thread initial-thread fn)))))
+  #-(or sbcl)
+  (defun call-within-initial-thread (fn)
+    (funcall fn)))
+
+(defmacro with-gl-context (&body body)
+  `(call-with-gl-context (lambda () ,@body)))
+
+(defun call-with-gl-context (fn)
+  (flet ((aux ()
+           (init)
+           (funcall fn)))
+    #+darwin (call-within-initial-thread #'aux t)
+    #-darwin (aux)))
+
 ;; We call init at load-time in order to ensure a usable glut as often
 ;; as possible. Also, we call init when the main event loop returns in
 ;; main.lisp and some other places. We do this to avoid having

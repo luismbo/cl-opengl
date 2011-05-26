@@ -51,7 +51,7 @@
                (loop while darwin-run-main-loop-p do (check-loop)))
              (init)
              (setf darwin-run-main-loop-p t)))
-      (%loop)))
+      (call-within-initial-thread #'%loop)))
   (defun leave-main-loop ()
     (setf darwin-run-main-loop-p nil)))
 
