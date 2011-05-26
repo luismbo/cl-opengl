@@ -46,12 +46,12 @@
 #+darwin
 (let ((darwin-run-main-loop-p t))
   (defun main-loop ()
-    (flet ((%loop ()
-             (without-fp-traps
-               (loop while darwin-run-main-loop-p do (check-loop)))
-             (init)
-             (setf darwin-run-main-loop-p t)))
-      (call-within-initial-thread #'%loop)))
+    (with-glut-init
+      (without-fp-traps
+        (loop while darwin-run-main-loop-p do (check-loop)))
+      (init)
+      (setf darwin-run-main-loop-p t)))
+
   (defun leave-main-loop ()
     (setf darwin-run-main-loop-p nil)))
 

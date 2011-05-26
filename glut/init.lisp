@@ -74,39 +74,36 @@
 #+darwin
 (progn
   #+sbcl
-  (defun call-within-initial-thread (fn &optional synchronous)
+  (defun call-within-initial-thread (fn)
     ;; KLUDGE: find a better way to get the initial thread.
     (let ((initial-thread (car (last (sb-thread:list-all-threads)))))
-      (cond ((eq sb-thread:*current-thread* initial-thread)
-             (funcall fn))
-            (synchronous
-             (let (result
-                   error
-                   (sem (sb-thread:make-semaphore)))
-               (sb-thread:interrupt-thread
-                initial-thread
-                (lambda ()
-                  (multiple-value-setq (result error)
-                    (ignore-errors (funcall fn)))
-                  (sb-thread:signal-semaphore sem)))
-               (sb-thread:wait-on-semaphore sem)
-               (if error
-                   (signal error)
-                   result)))
-            (t
-             (sb-thread:interrupt-thread initial-thread fn)))))
+      (if (eq sb-thread:*current-thread* initial-thread)
+          (funcall fn)
+          (let (result
+                error
+                (sem (sb-thread:make-semaphore)))
+            (sb-thread:interrupt-thread
+             initial-thread
+             (lambda ()
+               (multiple-value-setq (result error)
+                 (ignore-errors (funcall fn)))
+               (sb-thread:signal-semaphore sem)))
+            (sb-thread:wait-on-semaphore sem)
+            (if error
+                (signal error)
+                result)))))
   #-(or sbcl)
   (defun call-within-initial-thread (fn)
     (funcall fn)))
 
-(defmacro with-gl-context (&body body)
-  `(call-with-gl-context (lambda () ,@body)))
+(defmacro with-glut-init (&body body)
+  `(call-with-glut-init (lambda () ,@body)))
 
-(defun call-with-gl-context (fn)
+(defun call-with-glut-init (fn)
   (flet ((aux ()
            (init)
            (funcall fn)))
-    #+darwin (call-within-initial-thread #'aux t)
+    #+darwin (call-within-initial-thread #'aux)
     #-darwin (aux)))
 
 ;; We call init at load-time in order to ensure a usable glut as often

@@ -214,7 +214,7 @@ Lexically binds CURRENT-WINDOW to the respective object."
 (defmethod initialize-instance :before
     ((win base-window) &key name &allow-other-keys)
   (declare (ignore win name))
-  (glut:init))
+  (with-glut-init))
 
 (defgeneric display-window (window)
   (:documentation
@@ -290,7 +290,6 @@ Lexically binds CURRENT-WINDOW to the respective object."
       (push event (events window))
       (when (eq event-name :idle)
         (push window *windows-with-idle-event*)))))
-
 
 (defmethod disable-event ((window base-window) event-name)
   (if (eq event-name :display)
