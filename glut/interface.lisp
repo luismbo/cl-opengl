@@ -2,7 +2,7 @@
 ;;;
 ;;; interface.lisp --- CLOS interface to the GLUT API.
 ;;;
-;;; Copyright (c) 2006, Luis Oliveira <loliveira@common-lisp.net>
+;;; Copyright (c) 2006-2011, Luis Oliveira <loliveira@common-lisp.net>
 ;;;   All rights reserved.
 ;;;
 ;;; Redistribution and use in source and binary forms, with or without
@@ -237,9 +237,13 @@ Lexically binds CURRENT-WINDOW to the respective object."
               ,@body)
          (set-window ,current-id)))))
 
+(defparameter *global-idle-hooks* nil
+  "A list of functions to be called without arguments from GLUT's idle event.")
+
 ;;; We do some extra stuff to provide an IDLE event per-window since
 ;;; GLUT's IDLE event is global.
 (define-glut-event idle (window)
+  (mapc #'funcall *global-idle-hooks*)
   (loop for win in *windows-with-idle-event*
         do (with-window win
              (idle win))))
@@ -280,6 +284,8 @@ Lexically binds CURRENT-WINDOW to the respective object."
   (call-next-method))
 
 (defmethod display-window ((win base-window))
+  (when *global-idle-hooks*
+    (register-callback (find-event-or-lose :idle)))
   (values))
 
 (defmethod enable-event ((window base-window) event-name)
@@ -290,7 +296,6 @@ Lexically binds CURRENT-WINDOW to the respective object."
       (push event (events window))
       (when (eq event-name :idle)
         (push window *windows-with-idle-event*)))))
-
 
 (defmethod disable-event ((window base-window) event-name)
   (if (eq event-name :display)
@@ -310,7 +315,8 @@ Lexically binds CURRENT-WINDOW to the respective object."
                   (delete window *windows-with-idle-event*))
             ;; We need to disable the idle callback here too in
             ;; addition to close.
-            (when (null *windows-with-idle-event*)
+            (when (and (null *windows-with-idle-event*)
+                       (null *global-idle-hooks*))
               (unregister-callback event)))))))
 
 (defun destroy-current-window ()
@@ -334,7 +340,8 @@ Lexically binds CURRENT-WINDOW to the respective object."
   (when (not (destroyed w))
     (setf (destroyed w) t)
     (destroy-window (id w)))
-  (when (null *windows-with-idle-event*)
+  (when (and (null *windows-with-idle-event*)
+             (null *global-idle-hooks*))
     (unregister-callback (find-event-or-lose :idle)))
   #+darwin
   (progn

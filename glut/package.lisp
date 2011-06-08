@@ -96,6 +96,7 @@
    #:enable-tick
    #:disable-tick
    ;; specials
+   #:*global-idle-hooks*
    #:*run-main-loop-after-display*)
   ;; everything else
   (:shadow #:get)
