@@ -79,21 +79,23 @@
     (let ((initial-thread (car (last (sb-thread:list-all-threads)))))
       (if (eq sb-thread:*current-thread* initial-thread)
           (funcall fn)
-          (let (result
-                error
+          (let ((result nil)
                 (sem (sb-thread:make-semaphore)))
             (sb-thread:interrupt-thread
              initial-thread
              (lambda ()
-               (multiple-value-setq (result error)
-                 (ignore-errors (funcall fn)))
-               (sb-thread:signal-semaphore sem)))
+               (unwind-protect
+                    (setq result (funcall fn))
+                 (sb-thread:signal-semaphore sem))))
             (sb-thread:wait-on-semaphore sem)
-            (if error
-                (signal error)
-                result)))))
+            result))))
   #-(or sbcl)
   (defun call-within-initial-thread (fn)
+    (warn "On MacOS X, GUI calls must be performed on the initial thread.~@
+           Alas, cl-glut doesn't know how to find the initial thread on this~@
+           Lisp (~A). Your Lisp will crash if the current thread is not the~@
+           initial one. Patches welcome!"
+          (lisp-implementation-type))
     (funcall fn)))
 
 (defmacro with-glut-init (&body body)
