@@ -124,38 +124,48 @@
 
 ;;;; Bart's version of DEFGLEXTFUN.
 
-#-(and)
-(defparameter *gl-extension-resetter-list* nil)
+;#-(and)
+(defparameter *gl-extension-setter-list* nil)
 
 ;;; FIXME? There's a possible race condition here, but this function
 ;;; is intended to be called while saving an image, so if someone is
 ;;; still calling GL functions we lose anyway...
-#-(and)
+;#-(and)
 (defun reset-gl-pointers ()
   (format t "~&;; resetting extension pointers...~%")
-  (mapc #'funcall *gl-extension-resetter-list*)
-  (setf *gl-extension-resetter-list* nil))
+  (dolist (setter *gl-extension-setter-list*)
+    (funcall setter (null-pointer)))
+  (setf *gl-extension-setter-list* nil))
 
-#-(and)
+(defun find-and-register-gl-ext-function (setter foreign-name)
+  (let ((pointer (gl-get-proc-address foreign-name)))
+    (assert (not (null-pointer-p pointer)) ()
+            "Couldn't load symbol ~A~%" foreign-name)
+    (push setter *gl-extension-setter-list*)
+    (funcall setter (gl-get-proc-address foreign-name))))
+
+;#-(and)
 (defmacro defglextfun ((cname lname) return-type &body args)
-  (with-unique-names (pointer)
-    `(let ((,pointer (null-pointer)))
+  (alexandria:with-unique-names (pointer)
+    `(progn
        (defun ,lname ,(mapcar #'car args)
-         (when (null-pointer-p ,pointer)
-           (setf ,pointer (%gl-get-proc-address ,cname))
-           (assert (not (null-pointer-p ,pointer)) ()
-                   "Couldn't load symbol ~A~%" ,cname)
-           (format t "Loaded function pointer for ~A: ~A~%" ,cname ,pointer)
-           (push (lambda () (setf ,pointer (null-pointer)))
-                 *gl-extension-resetter-list*))
-         (foreign-funcall-pointer
-          ,pointer
-          (:library opengl)
-          ,@(loop for arg in args collect (second arg) collect (first arg))
-          ,return-type)))))
+         (let* ((cache (load-time-value (cons 'pointer-cache nil)))
+                (pointer (cdr cache)))
+           (when (null-pointer-p pointer)
+             (find-and-register-gl-ext-function (lambda (p) (setf (cdr cache) p))
+                                                ,cname))
+           (multiple-value-prog1
+               (foreign-funcall-pointer
+                pointer
+                (:library opengl)
+                ,@(loop for arg in args
+                        collect (second arg) collect (first arg))
+                ,return-type)
+             #-cl-opengl-no-check-error
+             (check-error ',cname)))))))
 
 ;;;; Thomas's version of DEFGLEXTFUN.
-
+#||
 (defun reset-gl-pointers ()
   (do-external-symbols (sym (find-package '#:%gl))
     (let ((dummy (get sym 'proc-address-dummy)))
@@ -190,3 +200,4 @@
                                ',body ,@args-list))
        (setf (get ',lisp-name 'proc-address-dummy) #',lisp-name)
        ',lisp-name)))
+||#
